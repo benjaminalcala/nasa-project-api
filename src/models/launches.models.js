@@ -14,7 +14,7 @@ const launch = {
   success: true
 }
 
-let latestFlightNumber = launch.flightNumber;
+const DEFAULT_FLIGHT_NUMBER = 100;
 
 saveLaunch(launch)
 
@@ -24,27 +24,48 @@ async function getAllLaunches(){
   )
 }
 
-function addNewLaunch(launch){
-  latestFlightNumber++;
-  launches.set(latestFlightNumber, Object.assign(launch, {
+
+async function getLatestFlightNumber(){
+  const latestLaunch = await launchesDatabase
+  .findOne()
+  .sort('-flightNumber')
+
+  if(!latestLaunch){
+    return DEFAULT_FLIGHT_NUMBER;
+  }
+
+  return latestLaunch.flightNumber;
+
+}
+
+async function setNewLaunch(launch){
+  const latestFlightNumber = await getLatestFlightNumber() + 1;
+  const newLaunch = Object.assign(launch, {
     flightNumber: latestFlightNumber,
     customers: ['ZTM', 'NASA'],
     upcoming: true,
     success: true
-  }))
+  })
+
+  await saveLaunch(newLaunch);
 }
 
-function abortLaunch(launchId){
-  const aborted = launches.get(launchId);
-
-  aborted.success = false;
-  aborted.upcoming = false;
-
-  return aborted;
+async function abortLaunch(launchId){
+  const aborted = await launchesDatabase.updateOne({
+    flightNumber: launchId
+  }, {
+    success: false,
+    upcoming: false
+  })
+  
+  return aborted.modifiedCount === 1;
 }
 
-function launchExists(launchId){
-  return launches.has(launchId);
+async function launchExists(launchId){
+  return await launchesDatabase.findOne({
+    flightNumber: launchId
+  })
+  
 }
 
 async function saveLaunch(launch){
@@ -56,7 +77,7 @@ async function saveLaunch(launch){
     throw new Error('Planet was not found')
   }
 
-  await launchesDatabase.updateOne({
+  await launchesDatabase.findOneAndUpdate({
     flightNumber: launch.flightNumber
   }, launch, {
     upsert: true
@@ -66,7 +87,7 @@ async function saveLaunch(launch){
 
 module.exports = {
   getAllLaunches,
-  addNewLaunch,
+  setNewLaunch,
   abortLaunch,
   launchExists
 }
